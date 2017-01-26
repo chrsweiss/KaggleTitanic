@@ -1,5 +1,15 @@
 require(Amelia)
 require(corrgram)
+require(dplyr)
+require(caret)
+#require(plyr)
+
+getTitle <- function(data){
+    my.match <- regexpr(pattern = '\\s\\w+\\.', text = data, ignore.case = TRUE)
+    st <- my.match + 1
+    end  <- my.match + attr(my.match, "match.length") - 2
+    substr(x = data, start = st, stop = end)
+}
 
 data.path <- "https://raw.githubusercontent.com/chrsweiss/KaggleTitanic/master/"
 test.file <- "test.csv"
@@ -76,3 +86,52 @@ corrgram.vars <- c("Survived", "Pclass", "Sex", "Age",
 corrgram(corrgram.data[,corrgram.vars], order=FALSE, 
          lower.panel=panel.ellipse, upper.panel=panel.pie, 
          text.panel=panel.txt, main="Titanic Training Data")
+
+train.data$Title <- getTitle(train.data$Name)
+
+with(train.data[order(train.data$Age),], boxplot(Age~Title))
+
+
+
+average.age <- 
+    train.data %>% 
+    filter(!is.na(Age)) %>%
+    group_by(Title) %>% 
+    summarise(EstAge=median(Age))
+
+train.data <- merge(train.data, average.age, by='Title')
+
+train.data[is.na(train.data$Age),which(colnames(train.data)=='Age')] <-
+    train.data[is.na(train.data$Age),which(colnames(train.data)=='EstAge')]
+
+inTrain = createDataPartition(train.data$Survived, p = 3/4)[[1]]
+
+mytrain = train.data[ inTrain,]
+
+mytest = train.data[-inTrain,]
+
+
+modrf <- train(Survived~Age+Sex, data=mytrain, method="rf")
+modgbm <- train(Survived~Age+Sex, data=mytrain, method="gbm")
+modlda <- train(Survived~Age+Sex, data=mytrain, method="lda")
+
+predrf <- predict(modrf, mytrain)
+predgbm <- predict(modgbm, mytrain)
+predlda <- predict(modlda, mytrain)
+
+datacomb <- data.frame(predrf, predgbm, predlda, Survived=mytrain$Survived)
+
+modcomb <- train(Survived~Age+Sex, data=mytrain, method="rf")
+
+predcomb <- predict(modcomb, datacomb)
+
+c_rf <- confusionMatrix(predrf, mytest$Survived)
+c_gbm <- confusionMatrix(predgbm, testing$diagnosis)
+c_lda <- confusionMatrix(predlda, testing$diagnosis)
+c_comb <- confusionMatrix(predcomb, testing$diagnosis)
+
+c_rf$overall[1]
+c_gbm$overall[1]
+c_lda$overall[1]
+c_comb$overall[1]
+

@@ -53,12 +53,27 @@ train.data <- merge(train.data, average.age, by='Title')
 train.data[is.na(train.data$Age),which(colnames(train.data)=='Age')] <-
     train.data[is.na(train.data$Age),which(colnames(train.data)=='EstAge')]
 
-inTrain = createDataPartition(train.data$Survived, p = 3/4)[[1]]
 
-mytrain = train.data[ inTrain,]
 
-mytest = train.data[-inTrain,]
+train.data$FareLog <- log(train.data$Fare + 1)
+modrf <- train(Survived~Age+Sex+FareLog, data=train.data, method="rf")
 
-modrf <- train(Survived~Age+Sex, data=mytrain, method="rf")
+test.data$Title <- getTitle(test.data$Name)
+
+average.age <- 
+    test.data %>% 
+    filter(!is.na(Age)) %>%
+    group_by(Title) %>% 
+    summarise(EstAge=median(Age))
+
+test.data <- merge(test.data, average.age, by='Title')
+
+test.data[is.na(test.data$Age),which(colnames(test.data)=='Age')] <-
+    test.data[is.na(test.data$Age),which(colnames(test.data)=='EstAge')]
+
+test.data$FareLog <- log(test.data$Fare + 1)
+test.prediction <- predict(modrf, test.data)
+
+output <- data.frame(PassengerId=test.data$PassengerId, Survived=test.prediction)
 
 
